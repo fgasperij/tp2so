@@ -6,10 +6,18 @@
 /* Estructura que almacena los datos de una reserva. */
 typedef struct {
 	int posiciones[ANCHO_AULA][ALTO_AULA];
+	pthread_mutex_t locks[ANCHO_AULA][ALTO_AULA];
+	pthread_mutex_t lock_cantidad;
 	int cantidad_de_personas;
 	
 	int rescatistas_disponibles;
 } t_aula;
+
+typedef struct thread_data {
+	int thread_no;
+	int socketfd_cliente;
+	t_aula *el_aula;
+} thdata;
 
 void t_aula_iniciar_vacia(t_aula *un_aula)
 {
@@ -19,9 +27,14 @@ void t_aula_iniciar_vacia(t_aula *un_aula)
 		for (j = 0; j < ALTO_AULA; j++)
 		{
 			un_aula->posiciones[i][j] = 0;
+			if (pthread_mutex_init(&(un_aula->locks[i][j]), NULL) != 0) {
+				printf("\n mutex init failed\n");        		
+			}
 		}
+	}	
+	if (pthread_mutex_init(&(un_aula->lock_cantidad), NULL) != 0) {
+		printf("\n mutex init failed\n");        		
 	}
-	
 	un_aula->cantidad_de_personas = 0;
 	
 	un_aula->rescatistas_disponibles = RESCATISTAS;
@@ -29,13 +42,20 @@ void t_aula_iniciar_vacia(t_aula *un_aula)
 
 void t_aula_ingresar(t_aula *un_aula, t_persona *alumno)
 {
+	pthread_mutex_lock(&(un_aula->lock_cantidad));		
 	un_aula->cantidad_de_personas++;
+	pthread_mutex_unlock(&(un_aula->lock_cantidad));
+	
+	pthread_mutex_lock(&(un_aula->locks[alumno->posicion_fila][alumno->posicion_columna]));	
 	un_aula->posiciones[alumno->posicion_fila][alumno->posicion_columna]++;
+	pthread_mutex_unlock(&(un_aula->locks[alumno->posicion_fila][alumno->posicion_columna]));
 }
 
 void t_aula_liberar(t_aula *un_aula, t_persona *alumno)
 {
+	pthread_mutex_lock(&(un_aula->lock_cantidad));		
 	un_aula->cantidad_de_personas--;
+	pthread_mutex_unlock(&(un_aula->lock_cantidad));		
 }
 
 static void terminar_servidor_de_alumno(int socket_fd, t_aula *aula, t_persona *alumno) {
@@ -44,7 +64,29 @@ static void terminar_servidor_de_alumno(int socket_fd, t_aula *aula, t_persona *
 	close(socket_fd);
 	
 	t_aula_liberar(aula, alumno);
-	exit(-1);
+	//exit(-1);
+	pthread_exit(0);
+}
+
+void lockear_posiciones_en_orden(t_aula *el_aula, t_persona *alumno, t_direccion dir)
+{
+	int fila1 = alumno->posicion_fila;
+	int fila2 = alumno->posicion_fila;
+	int columna1 = alumno->posicion_columna;
+	int columna2 = alumno->posicion_columna;
+	
+	if (dir == ARRIBA) {
+		columna1--;
+	} else if (dir == DERECHA) {
+		columna2++;
+	} else if (dir == ABAJO) {
+		fila2++;
+	} else if (dir == IZQUIERDA) {
+		columna1--;
+	}
+	
+	pthread_mutex_lock(&(el_aula->locks[fila1][columna1]));
+	pthread_mutex_lock(&(el_aula->locks[fila2][columna2]));
 }
 
 
@@ -61,20 +103,50 @@ t_comando intentar_moverse(t_aula *el_aula, t_persona *alumno, t_direccion dir)
 	
 	bool entre_limites = (fila >= 0) && (columna >= 0) &&
 	     (fila < ANCHO_AULA) && (columna < ALTO_AULA);
-	     
-	bool pudo_moverse = alumno->salio ||
-	    (entre_limites && el_aula->posiciones[fila][columna] < MAXIMO_POR_POSICION);
-	
-	
-	if (pudo_moverse)
-	{
-		if (!alumno->salio)
-			el_aula->posiciones[fila][columna]++;
+	    
+	bool pudo_moverse = false;
+	 
+	if (alumno->salio) {
+		pthread_mutex_lock(&(el_aula->locks[alumno->posicion_fila][alumno->posicion_columna]));
 		el_aula->posiciones[alumno->posicion_fila][alumno->posicion_columna]--;
+		pthread_mutex_unlock(&(el_aula->locks[alumno->posicion_fila][alumno->posicion_columna]));
+		
 		alumno->posicion_fila = fila;
-		alumno->posicion_columna = columna;
-	}
-	
+		alumno->posicion_columna = columna;	
+		pudo_moverse = true;
+	} else if (entre_limites) {
+		//lockear_posiciones_en_orden(el_aula, alumno, dir);
+		// lockear las posiciones en orden
+		int fila1 = alumno->posicion_fila;
+		int fila2 = alumno->posicion_fila;
+		int columna1 = alumno->posicion_columna;
+		int columna2 = alumno->posicion_columna;
+		
+		if (dir == ARRIBA) {
+			fila1--;
+		} else if (dir == DERECHA) {
+			columna2++;
+		} else if (dir == ABAJO) {
+			fila2++;
+		} else if (dir == IZQUIERDA) {
+			columna1--;
+		}
+		
+		pthread_mutex_lock(&(el_aula->locks[fila1][columna1]));
+		pthread_mutex_lock(&(el_aula->locks[fila2][columna2]));
+		
+		
+		if (el_aula->posiciones[fila][columna] < MAXIMO_POR_POSICION) {
+			el_aula->posiciones[fila][columna]++;
+			el_aula->posiciones[alumno->posicion_fila][alumno->posicion_columna]--;
+		}
+		pthread_mutex_unlock(&(el_aula->locks[alumno->posicion_fila][alumno->posicion_columna]));
+		pthread_mutex_unlock(&(el_aula->locks[fila][columna]));
+		
+		alumno->posicion_fila = fila;
+		alumno->posicion_columna = columna;	
+		pudo_moverse = true;
+	}	
 	
 	//~ if (pudo_moverse)
 		//~ printf("OK!\n");
@@ -93,8 +165,13 @@ void colocar_mascara(t_aula *el_aula, t_persona *alumno)
 }
 
 
-void *atendedor_de_alumno(int socket_fd, t_aula *el_aula)
+void *atendedor_de_alumno(void *data_ptr)
 {
+	thdata *data;
+	data = (thdata *) data_ptr;
+	int socket_fd = data->socketfd_cliente;
+	t_aula *el_aula = data->el_aula;
+	
 	t_persona alumno;
 	t_persona_inicializar(&alumno);
 	
@@ -171,18 +248,28 @@ int main(void)
 	}
 	
 	t_aula el_aula;
-	t_aula_iniciar_vacia(&el_aula);
+	t_aula_iniciar_vacia(&el_aula);	
 	
 	/// Aceptar conexiones entrantes.
 	socket_size = sizeof(remoto);
+	int thread_count = 1;	
 	for(;;){		
 		if (-1 == (socketfd_cliente = 
 					accept(socket_servidor, (struct sockaddr*) &remoto, (socklen_t*) &socket_size)))
 		{			
 			printf("!! Error al aceptar conexion\n");
 		}
-		else {
-			atendedor_de_alumno(socketfd_cliente, &el_aula);
+		else {						
+			// initialize thread
+			pthread_t current_thread;
+			thdata current_data;
+			current_data.thread_no = thread_count;
+			current_data.el_aula = &el_aula;
+			current_data.socketfd_cliente = socketfd_cliente;
+			thread_count++;
+			
+			// atendedor_de_alumno(socketfd_cliente, &el_aula);
+			pthread_create(&current_thread, NULL, (void *) &atendedor_de_alumno, (void *) &current_data);
 		}
 	}
 

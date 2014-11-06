@@ -108,6 +108,7 @@ int recibir_nombre_y_posicion(int socket_fd, t_persona *persona)
 	char buf[MENSAJE_MAXIMO+1];
 
 	if (recibir(socket_fd, buf) != 0) {
+		printf("Error recibiend nombre y posición del alumno: %s", persona->nombre);
 		return -1;
 	}
 	
