@@ -68,28 +68,6 @@ static void terminar_servidor_de_alumno(int socket_fd, t_aula *aula, t_persona *
 	pthread_exit(0);
 }
 
-void lockear_posiciones_en_orden(t_aula *el_aula, t_persona *alumno, t_direccion dir)
-{
-	int fila1 = alumno->posicion_fila;
-	int fila2 = alumno->posicion_fila;
-	int columna1 = alumno->posicion_columna;
-	int columna2 = alumno->posicion_columna;
-	
-	if (dir == ARRIBA) {
-		columna1--;
-	} else if (dir == DERECHA) {
-		columna2++;
-	} else if (dir == ABAJO) {
-		fila2++;
-	} else if (dir == IZQUIERDA) {
-		columna1--;
-	}
-	
-	pthread_mutex_lock(&(el_aula->locks[fila1][columna1]));
-	pthread_mutex_lock(&(el_aula->locks[fila2][columna2]));
-}
-
-
 t_comando intentar_moverse(t_aula *el_aula, t_persona *alumno, t_direccion dir)
 {
 	int fila = alumno->posicion_fila;
