@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
 		
 		scanf("%d", &item);
 		t_direccion direccion = item - 1;
-		if(direccion < 0 || direccion > 3) {
+		if(direccion > 3) {
 			printf(">> Ingrese una direccion valida por favor (zopenco!).\n");
 			continue;
 		}

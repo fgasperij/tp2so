@@ -1,0 +1,23 @@
+\section{Sincronización}
+
+\subsection{Liberar aula}
+Subtítulo: cómo formar un grupo de 5 sin morir en el intento.
+
+Utilizamos dos variables:
+\begin{description}
+  \item[grupo\_de\_salida] representa la cantidad de personas en el grupo que se está formando
+  para salir. Son alumnos a los que ya se les colocó la máscara y sólo están esperando
+  que se termine de formar el grupo de salida.
+  \item[salieron] representa la cantidad de personas que salieron del grupo formado.
+\end{description}
+
+
+
+Me parece que permite un mayor grado de concurrencia que el número 5 afuera del aula
+levante 5 tickets y que los agarren los primeros. Además, debo decrementar la cantidad de
+personas dentro del aula primero, ya que una vez que se llama a la función la persona
+ya alcanzó la salida del aula, la sincronización lo que permite es organizar la salida del
+edificio.
+
+Nos gustaría haber experimentado un poco más situaciones en las que están entrando personas
+al aula y simultáneamente saliendo.

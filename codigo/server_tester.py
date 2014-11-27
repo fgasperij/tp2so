@@ -7,7 +7,7 @@ from paises import *
 
 HOST = 'localhost'
 PORT = 5555
-CLIENTES = 5
+CLIENTES = 11
 
 class TCPFramer:
 	def __init__(self, socket):
@@ -44,9 +44,9 @@ class Cliente:
 		#time.sleep(0.5)
 
 	def esperarMascara(self):
-		#response = self.framer.receive()
-		#print("Respuesta: <"+ response+ ">")	
-		print(self.nombre, "Ya tengo mascara")
+		response = self.framer.receive()
+		print("Respuesta: <"+ response+ ">")	
+		#print(self.nombre, "Ya tengo mascara")
 
 		
 	def avanzarUnPaso(self):

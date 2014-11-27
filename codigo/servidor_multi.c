@@ -3,15 +3,14 @@
 
 #include "biblioteca.h"
 
-/* Estructura que almacena los datos de una reserva. */
+/* Estructura que almacena los datos de un reserva. */
 typedef struct {
 	int posiciones[ANCHO_AULA][ALTO_AULA];
+  // mutexs para cada una de las posiciones del aula
 	pthread_mutex_t locks[ANCHO_AULA][ALTO_AULA];
-	pthread_mutex_t lock_cantidad;
+  // mutex para la cantidad de personas en el aula
+	pthread_mutex_t mutex_cantidad;
 	int cantidad_de_personas;
-	int tanda;
-	
-	int rescatistas_disponibles;
 } t_aula;
 
 typedef struct thread_data {
@@ -20,11 +19,25 @@ typedef struct thread_data {
 	t_aula *el_aula;
 } thdata;
 
+// Variables globales que utilizaremos para sincronizar:
+// 1. la utilización de los rescatistas
+// 2. la salida de alumnos en grupos de a 5 o menos en caso
+// de que sean los últimos
+// rescatistas
 int rescatistas = RESCATISTAS;
 pthread_cond_t cv_rescatistas;
 pthread_mutex_t mutex_cv_rescatistas;
-pthread_cond_t cv_tanda;
-pthread_mutex_t mutex_tanda;
+// afuera
+int afuera = 0;
+pthread_mutex_t mutex_afuera;
+//grupo_de_salida
+int grupo_de_salida = 0;
+bool hay_grupo_de_salida = false;
+pthread_cond_t cv_grupo_de_salida;
+pthread_mutex_t mutex_grupo_de_salida;
+// salieron
+int salieron = 0;
+pthread_mutex_t mutex_salieron;
 
 void t_aula_iniciar_vacia(t_aula *un_aula)
 {
@@ -34,98 +47,85 @@ void t_aula_iniciar_vacia(t_aula *un_aula)
 		for (j = 0; j < ALTO_AULA; j++)
 		{
 			un_aula->posiciones[i][j] = 0;
+      // inicializamos cada uno de los mutex correspondiente a cada
+      // una de las posiciones del aula
 			if (pthread_mutex_init(&(un_aula->locks[i][j]), NULL) != 0) {
 				printf("\n mutex init failed\n");        		
 			}
 		}
 	}	
-	if (pthread_mutex_init(&(un_aula->lock_cantidad), NULL) != 0) {
+  // inicialización del mutex de la cantidad de personas en el aula
+	if (pthread_mutex_init(&(un_aula->mutex_cantidad), NULL) != 0) {
 		printf("\n mutex init failed\n");        		
 	}
 	un_aula->cantidad_de_personas = 0;
-	un_aula->tanda = 0;
-	
-	un_aula->rescatistas_disponibles = RESCATISTAS;
 }
 
 void t_aula_ingresar(t_aula *un_aula, t_persona *alumno)
 {
-	pthread_mutex_lock(&(un_aula->lock_cantidad));		
+	pthread_mutex_lock(&(un_aula->mutex_cantidad));		
 	un_aula->cantidad_de_personas++;
-	pthread_mutex_unlock(&(un_aula->lock_cantidad));
+	pthread_mutex_unlock(&(un_aula->mutex_cantidad));
 	
 	pthread_mutex_lock(&(un_aula->locks[alumno->posicion_fila][alumno->posicion_columna]));	
 	un_aula->posiciones[alumno->posicion_fila][alumno->posicion_columna]++;
 	pthread_mutex_unlock(&(un_aula->locks[alumno->posicion_fila][alumno->posicion_columna]));
 }
 
-void pseudo () {
-	int grupo;
-	pthread_mutex_lock(&(un_aula->lock_cantidad));
-	if (un_aula->cantidad_de_personas >= 5) {
-		grupo = 5;
-	} else {
-		grupo = un_aula->cantidad_de_personas;
-	}
-	pthread_mutex_unlock(&(un_aula->lock_cantidad));
-	
-	pthread_mutex_lock(&(un_aula->lock_esperando));
-	++esperando_en_grupo;
-	while (esperando_en_grupo < grupo) {
-		pthread_cond_wait(&cv_grupo_formado, &(un_aula->lock_esperando));
-	}
-	pthread_mutex_lock(&(un_aula->lock_esperando));
-		
-}
 void t_aula_liberar(t_aula *un_aula, t_persona *alumno)
 {
-	bool ultimo_del_grupo = false;
-	printf("%s: Pido lock de tanda\n", alumno->nombre);
-	pthread_mutex_lock(&mutex_tanda);		
-	printf("%s: Obtuve lock de tanda\n", alumno->nombre);
-		while(un_aula->tanda == 5) {
-			printf("%s: Tanda es igual a 5, voy a esperar que el grupo termine de salir.\n", alumno->nombre);
-			pthread_cond_wait(&cv_tanda, &mutex_tanda);
-		}
-		if (un_aula->tanda == 4) {
-			printf("%s: Soy el ultimo del grupo\n", alumno->nombre);
-			ultimo_del_grupo = true;
-		}
-		printf("%s: Ingreso a la tanda\n", alumno->nombre);
-		++un_aula->tanda;
-		printf("%s: Libero lock de tanda\n", alumno->nombre);
-	pthread_mutex_unlock(&mutex_tanda);			
-	printf("%s: Signal de cond_wait de tanda\n", alumno->nombre);
-	pthread_cond_signal(&cv_tanda);
-	printf("%s: Pido lock de tanda\n", alumno->nombre);
-	pthread_mutex_lock(&mutex_tanda);			
-	printf("%s: Obtuve lock de tanda\n", alumno->nombre);
-		while (un_aula->tanda < 5) {
-			printf("%s: Tanda es menor a 5, voy a esperar que el grupo termine de formarse.\n", alumno->nombre);
-			pthread_cond_wait(&cv_tanda, &mutex_tanda);
-		}
-	printf("%s: Se llenó la tanda\n", alumno->nombre);	
-	pthread_mutex_unlock(&mutex_tanda);
-	if (ultimo_del_grupo) {
-		printf("%s: Soy el último del grupo, despierto al resto\n", alumno->nombre);
-		pthread_cond_broadcast(&cv_tanda);
-	}
-	printf("%s: Pido lock de cantidad de personas\n", alumno->nombre);
-	pthread_mutex_lock(&(un_aula->lock_cantidad));
-		printf("%s: Obtuve lock de cantidad de personas\n", alumno->nombre);
-		printf("%s: Disminuyo la cantidad de personas del aula\n", alumno->nombre);		
+  // una vez que llego a la salida el alumno ya se encuentra
+  // fuera del aula, es por ésta razón que primero decrementamos
+  // la cantidad de personas dentro del aula.
+	pthread_mutex_lock(&(un_aula->mutex_cantidad));
 		un_aula->cantidad_de_personas--;
-		printf("%s: Libero lock de cantidad de personas\n", alumno->nombre);					
-	pthread_mutex_unlock(&(un_aula->lock_cantidad));		
-	if (ultimo_del_grupo) {
-		printf("%s: Soy el último del grupo, pido lock de tanda para resetearla\n", alumno->nombre);
-		pthread_mutex_lock(&mutex_tanda);
-		printf("%s: Soy el último y obtuve lock de tanda para resetearlo.\n", alumno->nombre);
-			un_aula->tanda = 0;
-		printf("%s: Libero el lock de tanda que obtuve para resetearla\n", alumno->nombre);
-		pthread_mutex_unlock(&mutex_tanda);
-		pthread_cond_signal(&cv_tanda);
-	}
+	pthread_mutex_unlock(&(un_aula->mutex_cantidad));		
+
+  // utilizamos 'afuera' para contabilizar la cantidad de personas
+  // que se encuentrarn fuera del aula pero todavía no fueron liberadas.
+	pthread_mutex_lock(&(mutex_afuera));
+		++afuera;
+	pthread_mutex_unlock(&(mutex_afuera));		
+
+  // hay_grupo_de_salida: indica si se formó un grupo y el mismo está saliendo.
+	pthread_mutex_lock(&mutex_grupo_de_salida);		
+		while(hay_grupo_de_salida) {
+      printf("%s: Espero a que termine de salir el grupo actual.\n", alumno->nombre);
+			pthread_cond_wait(&cv_grupo_de_salida, &mutex_grupo_de_salida);
+		}
+		++grupo_de_salida;
+    printf("%s: Ya formo parte del grupo de salida. Soy el %i\n", alumno->nombre, grupo_de_salida);
+    bool somos_los_ultimos = (un_aula->cantidad_de_personas == 0) && (grupo_de_salida == afuera);
+    bool grupo_lleno = (grupo_de_salida == 5);
+    bool soy_el_ultimo = grupo_lleno || somos_los_ultimos;
+    while (grupo_de_salida < 5 && 
+        (un_aula->cantidad_de_personas > 0 || grupo_de_salida < afuera) &&
+        !hay_grupo_de_salida) {
+      printf("%s: Espero a que la tanda se complete. Recién somos %i.\n", alumno->nombre, grupo_de_salida);
+			pthread_cond_wait(&cv_grupo_de_salida, &mutex_grupo_de_salida);
+		}
+	pthread_mutex_unlock(&mutex_grupo_de_salida);
+  if (soy_el_ultimo ) {
+    // sólo el último despierta a todos los del grupo
+    hay_grupo_de_salida = true;
+    pthread_cond_broadcast(&cv_grupo_de_salida);
+  }
+
+  printf("%s: Grupo de salida armado, salgamos!\n", alumno->nombre);
+  pthread_mutex_lock(&mutex_salieron);
+    ++salieron;
+    printf("%s: Salí! Todavía quedan %i.\n", alumno->nombre, grupo_de_salida-salieron);
+    if (salieron == grupo_de_salida) {
+      printf("%s: Soy el último en salir.\n", alumno->nombre);
+      salieron = 0;
+      pthread_mutex_lock(&mutex_grupo_de_salida);			
+        grupo_de_salida = 0;
+        hay_grupo_de_salida = false;
+      pthread_mutex_unlock(&mutex_grupo_de_salida);
+      pthread_cond_signal(&cv_grupo_de_salida);
+    }
+  pthread_mutex_unlock(&mutex_salieron);
+
 }
 
 static void terminar_servidor_de_alumno(int socket_fd, t_aula *aula, t_persona *alumno) {
@@ -142,6 +142,7 @@ t_comando intentar_moverse(t_aula *el_aula, t_persona *alumno, t_direccion dir)
 {
 	int fila = alumno->posicion_fila;
 	int columna = alumno->posicion_columna;
+  // modifica fila y columna con la posible nueva posición del alumno
 	alumno->salio = direccion_moverse_hacia(dir, &fila, &columna);
 
 	///char buf[STRING_MAXIMO];
@@ -155,6 +156,9 @@ t_comando intentar_moverse(t_aula *el_aula, t_persona *alumno, t_direccion dir)
 	bool pudo_moverse = false;
 	 
 	if (alumno->salio) {
+    // si el alumno salió del aula con el último movimiento no es necesario
+    // chequear si se supera el MAXIMO_POR_POSICION porque fuera del aula
+    // no hay máximo.
 		pthread_mutex_lock(&(el_aula->locks[alumno->posicion_fila][alumno->posicion_columna]));
 		el_aula->posiciones[alumno->posicion_fila][alumno->posicion_columna]--;
 		pthread_mutex_unlock(&(el_aula->locks[alumno->posicion_fila][alumno->posicion_columna]));
@@ -212,33 +216,20 @@ void colocar_mascara(t_aula *el_aula, t_persona *alumno)
 {
 	printf("Esperando rescatista. Ya casi %s!\n", alumno->nombre);
 	// esperar rescatista libre
-	alumno->tiene_mascara = true;
-	
-	printf("%s: Pido lock de rescatistas\n", alumno->nombre);
 	pthread_mutex_lock(&mutex_cv_rescatistas);
-	printf("%s: Obtuve lock de rescatistas\n", alumno->nombre);
 		while (rescatistas == 0) {
 			printf("%s: rescatistas es igual a 0\n", alumno->nombre);
-			if (rescatistas < 0) {
-				printf("La cantidad de rescatistas es menor a 0\n");				
-			}			
-			printf("%s: Hago cond_wait de rescatistas\n", alumno->nombre);
 			pthread_cond_wait(&cv_rescatistas, &mutex_cv_rescatistas);
 			printf("%s: Me desperté del cond_wait de rescatistas\n", alumno->nombre);
 		}			
 		printf("%s: Conseguí un rescatista\n", alumno->nombre);
 		--rescatistas;
-		printf("%s: Libero el lock de rescatistas\n", alumno->nombre);
 	pthread_mutex_unlock(&mutex_cv_rescatistas);
 		printf("%s: Me colocan la máscara\n", alumno->nombre);
 		alumno->tiene_mascara = true;
-	printf("%s: Pido lock de rescatistas\n", alumno->nombre);		
 	pthread_mutex_lock(&mutex_cv_rescatistas);
-	printf("%s: Obtuve lock de rescatistas\n", alumno->nombre);
 		++rescatistas;
-		printf("%s: Libero el lock de rescatistas\n", alumno->nombre);
 	pthread_mutex_unlock(&mutex_cv_rescatistas);
-	printf("%s: Signal del cond_wait de rescatistas\n", alumno->nombre);
 	pthread_cond_signal(&cv_rescatistas);
 	
 }
@@ -332,20 +323,28 @@ int main(void)
 	t_aula_iniciar_vacia(&el_aula);
 	
 		
+	if (pthread_mutex_init(&mutex_afuera, NULL) != 0 ) {
+		printf("La inicialización del mutex de la variable afuera falló.");
+		return 1;
+	}
+	if (pthread_mutex_init(&mutex_salieron, NULL) != 0 ) {
+		printf("La inicialización del mutex de la variable salieron falló.");
+		return 1;
+	}
 	if (pthread_mutex_init(&mutex_cv_rescatistas, NULL) != 0 ) {
-		printf("La inicialización de la variable de condición de los rescatistas falló.");
+		printf("La inicialización del mutex de la variable de condición de los rescatistas falló.");
 		return 1;
 	}
 	if (pthread_cond_init(&cv_rescatistas, NULL) != 0 ) {
 		printf("La inicialización de la variable de condición de los rescatistas falló.");
 		return 1;
 	}
-	if (pthread_mutex_init(&mutex_tanda, NULL) != 0 ) {
-		printf("La inicialización de la variable de condición de los rescatistas falló.");
+	if (pthread_mutex_init(&mutex_grupo_de_salida, NULL) != 0 ) {
+		printf("La inicialización del mutex de la variable grupo_de_salida falló.");
 		return 1;
 	}
-	if (pthread_cond_init(&cv_tanda, NULL) != 0 ) {
-		printf("La inicialización de la variable de condición de los rescatistas falló.");
+	if (pthread_cond_init(&cv_grupo_de_salida, NULL) != 0 ) {
+		printf("La inicialización de la variable de condición de grupo de salida falló.");
 		return 1;
 	}
 	
