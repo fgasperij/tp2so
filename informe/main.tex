@@ -1,23 +1,137 @@
-\section{Sincronización}
+\documentclass[a4paper, 11pt]{article}
+\setcounter{section}{-1}
+\usepackage{verbatim} 
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{siunitx}
+\sisetup{
+    %output-decimal-marker={,}% just uncomment if you want to use comma as the decimal marker!
+}
+\usepackage{caratula}
+\usepackage{listings}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish, activeacute]{babel}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage[width=15.5cm, left=3cm, top=2.5cm, height= 24.5cm]{geometry}
+\usepackage{graphicx}
+%\usepackage{subcaption}
+\usepackage[all]{xy}
+\usepackage{multicol}
+\usepackage{subfig}
+\usepackage{algorithm}
+\usepackage{algorithmic}
+\usepackage{cancel}
+\usepackage{array}
+\usepackage{float}
+\usepackage{xcolor}
+\usepackage{color,hyperref}
+\setcounter{secnumdepth}{3} %%agrego subsubsection
+\usepackage[nottoc,notlot,notlof]{tocbibind}
+\usepackage{listings}
+\lstset{
+	language=C++,
+	basicstyle=\ttfamily,
+	keywordstyle=\color{blue}\ttfamily,
+	stringstyle=\color{red}\ttfamily,
+	commentstyle=\color{green}\ttfamily,
+	morecomment=[l][\color{magenta}]{\#}
+}
+\newtheorem{lema}{Lema}
+\newtheorem{teorema}{Teorema}
+\newtheorem{corolario}{Corolario}
+\newtheorem*{correctitud}{Correctitud del algoritmo}
+\newtheorem*{notacion}{Notación}
 
-\subsection{Liberar aula}
-Subtítulo: cómo formar un grupo de 5 sin morir en el intento.
+%\lstset{basicstyle=\footnotesize\ttfamily, breaklines=true, breakatwhitespace=true}
+%\lstset{numbers=left, numberstyle=\scriptsize}
+\lstset{
+     literate=%
+         {á}{{\'a}}1
+         {í}{{\'i}}1
+         {é}{{\'e}}1
+         {ý}{{\'y}}1
+         {ú}{{\'u}}1
+         {ó}{{\'o}}1
+         {ě}{{\v{e}}}1
+         {š}{{\v{s}}}1
+         {č}{{\v{c}}}1
+         {ř}{{\v{r}}}1
+         {ž}{{\v{z}}}1
+         {ď}{{\v{d}}}1
+         {ť}{{\v{t}}}1
+         {ñ}{{\~n}}1                
+         {ů}{{\r{u}}}1
+         {Á}{{\'A}}1
+         {Í}{{\'I}}1
+         {É}{{\'E}}1
+         {Ý}{{\'Y}}1
+         {Ú}{{\'U}}1
+         {Ó}{{\'O}}1
+         {Ě}{{\v{E}}}1
+         {Š}{{\v{S}}}1
+         {Č}{{\v{C}}}1
+         {Ř}{{\v{R}}}1
+         {Ž}{{\v{Z}}}1
+         {Ď}{{\v{D}}}1
+         {Ť}{{\v{T}}}1
+         {Ň}{{\v{N}}}1                
+         {Ů}{{\r{U}}}1    
+}
 
-Utilizamos dos variables:
-\begin{description}
-  \item[grupo\_de\_salida] representa la cantidad de personas en el grupo que se está formando
-  para salir. Son alumnos a los que ya se les colocó la máscara y sólo están esperando
-  que se termine de formar el grupo de salida.
-  \item[salieron] representa la cantidad de personas que salieron del grupo formado.
-\end{description}
+
+%%%%%%%%%%%%%% ALGUNAS MACROS %%%%%%%%%%%%%%
+% For \url{SOME_URL}, links SOME_URL to the url SOME_URL
+\providecommand*\url[1]{\href{#1}{#1}}
+
+\setlength{\parskip}{10pt plus 1pt minus 1pt}
+\usepackage{tikz}
+\def\checkmark{\tikz\fill[scale=0.4](0,.35) -- (.25,0) -- (1,.7) -- (.25,.15) -- cycle;}
+
+% Same as above, but pretty-prints SOME_URL in teletype fixed-width font
+\renewcommand*\url[1]{\href{#1}{\texttt{#1}}}
+
+% Comando para poner el simbolo de Reales
+\newcommand{\real}{\hbox{\bf R}}
+
+\providecommand*\code[1]{\texttt{#1}}
+
+%uso: \ponerGrafico{file}{caption}{scale}{label}
+\newcommand{\ponerGrafico}[4]
+{\begin{figure}[H]
+	\centering
+	\subfloat{\includegraphics[scale=#3]{#1}}
+	\caption{#2} \label{fig:#4}
+\end{figure}
+}
+
+\renewcommand{\algorithmiccomment}[1]{\hfill #1}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\materia{Sistemas Operativos}
+
+\titulo{Trabajo práctico 2}
+%\fecha{fecha de entrega}
+%\grupo{Nro grupo}
+\integrante{Fernando Gasperi Jabalera}{56/09}{fgasperijabalera@gmail.com}
+\integrante{Martín Matías Monti}{727/10}{martinmatiasmonti@gmail.com}
+\integrante{Diego Alejandro Amil}{68/09}{amildie@gmail.com}
 
 
+%\include{templates}
 
-Me parece que permite un mayor grado de concurrencia que el número 5 afuera del aula
-levante 5 tickets y que los agarren los primeros. Además, debo decrementar la cantidad de
-personas dentro del aula primero, ya que una vez que se llama a la función la persona
-ya alcanzó la salida del aula, la sincronización lo que permite es organizar la salida del
-edificio.
+\begin{document}
+\pagestyle{myheadings}
+\maketitle
+%\markboth{Nombre materia}{Nombre TP}
 
-Nos gustaría haber experimentado un poco más situaciones en las que están entrando personas
-al aula y simultáneamente saliendo.
+\thispagestyle{empty}
+\tableofcontents
+
+\setcounter{section}{0}
+\newpage
+\input{implementacion}
+
+\end{document}

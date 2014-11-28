@@ -26,7 +26,7 @@ typedef struct thread_data {
 // rescatistas
 int rescatistas = RESCATISTAS;
 pthread_cond_t cv_rescatistas;
-pthread_mutex_t mutex_cv_rescatistas;
+pthread_mutex_t mutex_rescatistas;
 // afuera
 int afuera = 0;
 pthread_mutex_t mutex_afuera;
@@ -216,20 +216,20 @@ void colocar_mascara(t_aula *el_aula, t_persona *alumno)
 {
 	printf("Esperando rescatista. Ya casi %s!\n", alumno->nombre);
 	// esperar rescatista libre
-	pthread_mutex_lock(&mutex_cv_rescatistas);
+	pthread_mutex_lock(&mutex_rescatistas);
 		while (rescatistas == 0) {
 			printf("%s: rescatistas es igual a 0\n", alumno->nombre);
-			pthread_cond_wait(&cv_rescatistas, &mutex_cv_rescatistas);
+			pthread_cond_wait(&cv_rescatistas, &mutex_rescatistas);
 			printf("%s: Me desperté del cond_wait de rescatistas\n", alumno->nombre);
 		}			
 		printf("%s: Conseguí un rescatista\n", alumno->nombre);
 		--rescatistas;
-	pthread_mutex_unlock(&mutex_cv_rescatistas);
+	pthread_mutex_unlock(&mutex_rescatistas);
 		printf("%s: Me colocan la máscara\n", alumno->nombre);
 		alumno->tiene_mascara = true;
-	pthread_mutex_lock(&mutex_cv_rescatistas);
+	pthread_mutex_lock(&mutex_rescatistas);
 		++rescatistas;
-	pthread_mutex_unlock(&mutex_cv_rescatistas);
+	pthread_mutex_unlock(&mutex_rescatistas);
 	pthread_cond_signal(&cv_rescatistas);
 	
 }
@@ -331,7 +331,7 @@ int main(void)
 		printf("La inicialización del mutex de la variable salieron falló.");
 		return 1;
 	}
-	if (pthread_mutex_init(&mutex_cv_rescatistas, NULL) != 0 ) {
+	if (pthread_mutex_init(&mutex_rescatistas, NULL) != 0 ) {
 		printf("La inicialización del mutex de la variable de condición de los rescatistas falló.");
 		return 1;
 	}
